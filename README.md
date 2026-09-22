@@ -1,1 +1,11 @@
 # smart-project-management-system
+
+SPMS is being actively developed by :-
+
+- Rajat Jain
+- Parth Bathe
+- Himank Yadav
+- Atharva Indamdar
+- Manan Sharma
+
+All the details about the project are available in "PROJECT_CONTEXT.md"
