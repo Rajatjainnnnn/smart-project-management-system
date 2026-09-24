@@ -8,4 +8,4 @@ SPMS is being actively developed by :-
 - Atharva Inamdar
 - Manan Sharma
 
-All the details about the project are available in "PROJECT_CONTEXT.md"
+All the details about the project are available in the file titled "PROJECT_CONTEXT.md"
