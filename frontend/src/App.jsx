@@ -1,18 +1,42 @@
-import { useState } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+
+import DashboardLayout from "./layouts/DashboardLayout";
+
+import Dashboard from "./pages/Dashboard";
+import Projects from "./pages/Projects";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
 
 import "./App.css";
-import { useEffect } from "react";
 
 function App() {
-	const [response, setResponse] = useState("loading...");
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Public routes */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
-	useEffect(() => {
-		fetch("/api/test")
-			.then((res) => res.text())
-			.then((data) => setResponse(data));
-	}, []);
+        {/* Application */}
+        <Route element={<DashboardLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/projects" element={<Projects />} />
+        </Route>
 
-	return <div>Response: {response}</div>;
+        {/* Default */}
+        <Route
+          path="*"
+          element={<Navigate to="/login" replace />}
+        />
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
 export default App;
