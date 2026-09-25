@@ -52,6 +52,8 @@
 
 body {
   margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
 }
 
 #root {
@@ -108,4 +110,13 @@ code {
   line-height: 135%;
   padding: 4px 8px;
   background: var(--code-bg);
+}
+
+button, input {
+  font: inherit;
+}
+
+button:focus-visible, a:focus-visible {
+  outline: 2px solid #a1bf43;
+  outline-offset: 3px;
 }
