@@ -1,8 +1,16 @@
-import { Outlet } from "react-router-dom";
+import { Navigate, Outlet } from "react-router-dom";
+
+import { getStoredAuth } from "../lib/auth";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 
 function DashboardLayout() {
+  const auth = getStoredAuth();
+
+  if (!auth?.access) {
+    return <Navigate to="/login" replace />;
+  }
+
   return (
     <div className="app-layout">
       <Sidebar />
