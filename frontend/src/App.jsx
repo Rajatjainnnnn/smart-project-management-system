@@ -13,8 +13,6 @@ import Projects from "./pages/Projects";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 
-import "./App.css";
-
 function ProtectedLayout() {
   const auth = getStoredAuth();
 
