@@ -7,51 +7,63 @@ function Navbar() {
   const auth = getStoredAuth();
 
   async function handleLogout() {
-    try {
-      if (auth?.refresh) {
-        await apiRequest("logout/", {
-          method: "POST",
-          body: JSON.stringify({ refresh: auth.refresh }),
-        });
+      try {
+        if (auth?.refresh) {
+          await apiRequest("logout/", {
+            method: "POST",
+            body: JSON.stringify({ refresh: auth.refresh }),
+          });
+        }
+      } catch {
+        // Ignore logout API failure and still clear local state.
+      } finally {
+        clearAuth();
+        navigate("/login", { replace: true });
       }
-    } catch {
-      // Ignore logout API failure and still clear local state.
-    } finally {
-      clearAuth();
-      navigate("/login", { replace: true });
     }
-  }
 
   const displayName = auth?.user?.first_name || auth?.user?.username || "User";
   const avatar = displayName.charAt(0).toUpperCase();
 
   return (
-    <header className="navbar">
-      <div className="navbar-left">
-        <div>
-          <h2>Smart Project Management</h2>
-          <p>Manage your projects and team efficiently</p>
-        </div>
+    <header className="flex h-19 items-center justify-between border-b border-(--border) bg-(--surface) px-8">
+      <div>
+        <h2 className="text-base font-semibold">Smart Project Management</h2>
+        <p className="mt-0.75 text-xs text-(--text-muted)">
+          Manage your projects and team efficiently
+        </p>
       </div>
 
-      <div className="navbar-right">
-        <button className="notification-button" aria-label="Notifications">
+      <div className="flex items-center gap-4.5">
+        <button
+          type="button"
+          aria-label="Notifications"
+          className="relative h-9.5 w-9.5 cursor-pointer rounded-[9px] border border-(--border) bg-(--surface)"
+        >
           🔔
-          <span className="notification-dot" />
+          <span className="absolute right-1.75 top-1.75 h-1.75 w-1.75 rounded-full border border-white bg-(--danger)" />
         </button>
 
-        <div className="profile">
-          <div className="avatar">{avatar}</div>
-
-          <div className="profile-info">
-            <strong>{displayName}</strong>
-            <span>{auth?.user?.email || "Student"}</span>
+        <div className="flex items-center gap-2.25">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-(--primary) text-[13px] font-bold text-white">
+            {avatar}
           </div>
 
-          <span className="profile-arrow">⌄</span>
+          <div>
+            <strong className="block text-xs">{displayName}</strong>
+            <span className="mt-0.5 block text-[10px] text-(--text-muted)">
+              {auth?.user?.email || "Student"}
+            </span>
+          </div>
+
+          <span className="text-(--text-muted)">⌄</span>
         </div>
 
-        <button className="secondary-button" onClick={handleLogout} type="button">
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="cursor-pointer rounded-lg border border-(--border) bg-(--surface) px-3.5 py-2 text-[13px] font-medium hover:bg-slate-50"
+        >
           Logout
         </button>
       </div>
