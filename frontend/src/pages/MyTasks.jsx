@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-const tasks = [
+const DEMO_TASKS_STORAGE_KEY = "spms-demo-tasks-v1";
+
+const sampleTasks = [
   {
     id: "TASK-101",
     title: "Create Login API",
@@ -78,10 +80,143 @@ const priorityOptions = [
   "Low",
 ];
 
+const taskStatuses = statusOptions.filter((status) => status !== "All");
+const priorities = priorityOptions.filter((priority) => priority !== "All");
+
+const emptyTaskForm = {
+  title: "",
+  description: "",
+  project: "",
+  priority: "Medium",
+  status: "To Do",
+  dueDate: "",
+};
+
+function readDemoTasks() {
+  try {
+    const storedTasks = localStorage.getItem(DEMO_TASKS_STORAGE_KEY);
+
+    if (storedTasks === null) {
+      return { tasks: sampleTasks, error: "" };
+    }
+
+    const parsedTasks = JSON.parse(storedTasks);
+    if (!Array.isArray(parsedTasks)) {
+      throw new Error("Saved demo tasks are not in the expected format.");
+    }
+
+    return { tasks: parsedTasks, error: "" };
+  } catch {
+    return {
+      tasks: sampleTasks,
+      error: "Saved demo tasks could not be read. The sample task list is shown instead.",
+    };
+  }
+}
+
+function formatDueDate(dueDate) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+    return dueDate;
+  }
+
+  const [year, month, day] = dueDate.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function MyTasks() {
+  const [taskState, setTaskState] = useState(readDemoTasks);
+  const { tasks, error: storageError } = taskState;
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [priorityFilter, setPriorityFilter] = useState("All");
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [taskForm, setTaskForm] = useState(emptyTaskForm);
+  const [formErrors, setFormErrors] = useState({});
+  const [persistenceError, setPersistenceError] = useState("");
+
+  useEffect(() => {
+    if (!isCreateModalOpen) return undefined;
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        closeCreateModal();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isCreateModalOpen]);
+
+  function saveTasks(nextTasks) {
+    setTaskState({ tasks: nextTasks, error: "" });
+
+    try {
+      localStorage.setItem(DEMO_TASKS_STORAGE_KEY, JSON.stringify(nextTasks));
+      setPersistenceError("");
+    } catch {
+      setPersistenceError(
+        "Changes are visible for this session but could not be saved in this browser."
+      );
+    }
+  }
+
+  function closeCreateModal() {
+    setIsCreateModalOpen(false);
+    setTaskForm(emptyTaskForm);
+    setFormErrors({});
+  }
+
+  function updateTaskField(field, value) {
+    setTaskForm((current) => ({ ...current, [field]: value }));
+    setFormErrors((current) => ({ ...current, [field]: "" }));
+  }
+
+  function handleCreateTask(event) {
+    event.preventDefault();
+
+    const errors = {};
+    ["title", "description", "project", "dueDate"].forEach((field) => {
+      if (!taskForm[field].trim()) {
+        errors[field] = "This field is required.";
+      }
+    });
+
+    if (!priorities.includes(taskForm.priority)) {
+      errors.priority = "Select a valid priority.";
+    }
+    if (!taskStatuses.includes(taskForm.status)) {
+      errors.status = "Select a valid status.";
+    }
+
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    const highestTaskNumber = tasks.reduce((highest, task) => {
+      const match = /^TASK-(\d+)$/.exec(task.id);
+      return match ? Math.max(highest, Number(match[1])) : highest;
+    }, 0);
+    const nextTask = {
+      ...taskForm,
+      title: taskForm.title.trim(),
+      description: taskForm.description.trim(),
+      project: taskForm.project.trim(),
+      id: `TASK-${String(highestTaskNumber + 1).padStart(3, "0")}`,
+      type: "Task",
+    };
+
+    saveTasks([nextTask, ...tasks]);
+    closeCreateModal();
+  }
+
+  function handleStatusChange(taskId, status) {
+    saveTasks(
+      tasks.map((task) => (task.id === taskId ? { ...task, status } : task))
+    );
+  }
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
@@ -104,7 +239,7 @@ function MyTasks() {
         matchesPriority
       );
     });
-  }, [search, statusFilter, priorityFilter]);
+  }, [tasks, search, statusFilter, priorityFilter]);
 
   const taskStats = {
     total: tasks.length,
@@ -136,11 +271,23 @@ function MyTasks() {
 
         <button
           type="button"
+          onClick={() => setIsCreateModalOpen(true)}
           className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
         >
           + Create Task
         </button>
       </div>
+
+      <div className="mb-5 rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 text-xs text-violet-800">
+        Demo tasks are stored only in this browser’s local storage. This temporary
+        frontend storage is not a database and is not shared with your team.
+      </div>
+
+      {storageError || persistenceError ? (
+        <p role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          {persistenceError || storageError}
+        </p>
+      ) : null}
 
       {/* Stats */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -254,6 +401,7 @@ function MyTasks() {
             <TaskCard
               key={task.id}
               task={task}
+              onStatusChange={handleStatusChange}
             />
           ))
         ) : (
@@ -272,6 +420,181 @@ function MyTasks() {
 
       </div>
 
+      {isCreateModalOpen ? (
+        <CreateTaskModal
+          form={taskForm}
+          errors={formErrors}
+          onChange={updateTaskField}
+          onClose={closeCreateModal}
+          onSubmit={handleCreateTask}
+        />
+      ) : null}
+
+    </div>
+  );
+}
+
+function CreateTaskModal({ form, errors, onChange, onClose, onSubmit }) {
+  const inputClass =
+    "w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
+
+  function renderError(field) {
+    return errors[field] ? (
+      <span id={`${field}-error`} className="mt-1 block text-xs text-red-600">
+        {errors[field]}
+      </span>
+    ) : null;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4 sm:p-6"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-task-title"
+        className="my-auto max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-7"
+      >
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-violet-700">
+              Demo task
+            </p>
+            <h2 id="create-task-title" className="text-xl font-bold text-slate-900">
+              Create a task
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Add a task to your local demo list.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close create task dialog"
+            className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+          >
+            ×
+          </button>
+        </div>
+
+        <form onSubmit={onSubmit} noValidate>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="sm:col-span-2">
+              <span className="mb-1.5 block text-sm font-medium text-slate-700">Title</span>
+              <input
+                autoFocus
+                type="text"
+                value={form.title}
+                onChange={(event) => onChange("title", event.target.value)}
+                aria-invalid={Boolean(errors.title)}
+                aria-describedby={errors.title ? "title-error" : undefined}
+                className={inputClass}
+                placeholder="e.g. Design the project overview"
+              />
+              {renderError("title")}
+            </label>
+
+            <label className="sm:col-span-2">
+              <span className="mb-1.5 block text-sm font-medium text-slate-700">Description</span>
+              <textarea
+                rows="3"
+                value={form.description}
+                onChange={(event) => onChange("description", event.target.value)}
+                aria-invalid={Boolean(errors.description)}
+                aria-describedby={errors.description ? "description-error" : undefined}
+                className={inputClass}
+                placeholder="Describe what needs to be done"
+              />
+              {renderError("description")}
+            </label>
+
+            <label>
+              <span className="mb-1.5 block text-sm font-medium text-slate-700">Project</span>
+              <input
+                type="text"
+                list="task-project-options"
+                value={form.project}
+                onChange={(event) => onChange("project", event.target.value)}
+                aria-invalid={Boolean(errors.project)}
+                aria-describedby={errors.project ? "project-error" : undefined}
+                className={inputClass}
+                placeholder="Enter a project name"
+              />
+              <datalist id="task-project-options">
+                {[...new Set(sampleTasks.map((task) => task.project))].map((project) => (
+                  <option key={project} value={project} />
+                ))}
+              </datalist>
+              {renderError("project")}
+            </label>
+
+            <label>
+              <span className="mb-1.5 block text-sm font-medium text-slate-700">Due date</span>
+              <input
+                type="date"
+                value={form.dueDate}
+                onChange={(event) => onChange("dueDate", event.target.value)}
+                aria-invalid={Boolean(errors.dueDate)}
+                aria-describedby={errors.dueDate ? "dueDate-error" : undefined}
+                className={inputClass}
+              />
+              {renderError("dueDate")}
+            </label>
+
+            <label>
+              <span className="mb-1.5 block text-sm font-medium text-slate-700">Priority</span>
+              <select
+                value={form.priority}
+                onChange={(event) => onChange("priority", event.target.value)}
+                aria-invalid={Boolean(errors.priority)}
+                aria-describedby={errors.priority ? "priority-error" : undefined}
+                className={inputClass}
+              >
+                {priorities.map((priority) => (
+                  <option key={priority} value={priority}>{priority}</option>
+                ))}
+              </select>
+              {renderError("priority")}
+            </label>
+
+            <label>
+              <span className="mb-1.5 block text-sm font-medium text-slate-700">Status</span>
+              <select
+                value={form.status}
+                onChange={(event) => onChange("status", event.target.value)}
+                aria-invalid={Boolean(errors.status)}
+                aria-describedby={errors.status ? "status-error" : undefined}
+                className={inputClass}
+              >
+                {taskStatuses.map((status) => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
+              </select>
+              {renderError("status")}
+            </label>
+          </div>
+
+          <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+            >
+              Create Task
+            </button>
+          </div>
+        </form>
+      </section>
     </div>
   );
 }
@@ -317,7 +640,7 @@ function StatCard({
   );
 }
 
-function TaskCard({ task }) {
+function TaskCard({ task, onStatusChange }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
 
@@ -356,9 +679,7 @@ function TaskCard({ task }) {
               •
             </span>
 
-            <span>
-              Due {task.dueDate}
-            </span>
+            <span>Due {formatDueDate(task.dueDate)}</span>
 
           </div>
 
@@ -369,7 +690,18 @@ function TaskCard({ task }) {
 
           <PriorityBadge priority={task.priority} />
 
-          <StatusBadge status={task.status} />
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+            <span className="sr-only">Status for {task.title}</span>
+            <select
+              value={task.status}
+              onChange={(event) => onStatusChange(task.id, event.target.value)}
+              className="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >
+              {taskStatuses.map((status) => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+          </label>
 
         </div>
 
@@ -393,25 +725,6 @@ function PriorityBadge({ priority }) {
       }`}
     >
       {priority}
-    </span>
-  );
-}
-
-function StatusBadge({ status }) {
-  const classes = {
-    "To Do": "bg-slate-100 text-slate-600",
-    "In Progress": "bg-blue-50 text-blue-600",
-    Review: "bg-purple-50 text-purple-600",
-    Done: "bg-green-50 text-green-600",
-  };
-
-  return (
-    <span
-      className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
-        classes[status]
-      }`}
-    >
-      {status}
     </span>
   );
 }
