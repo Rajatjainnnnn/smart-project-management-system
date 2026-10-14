@@ -1,10 +1,19 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { apiRequest, clearAuth, getStoredAuth } from "../lib/auth";
 
 function Navbar() {
   const navigate = useNavigate();
-  const auth = getStoredAuth();
+  const [auth, setAuth] = useState(getStoredAuth());
+
+  useEffect(() => {
+    function updateAuth() {
+      setAuth(getStoredAuth());
+    }
+    window.addEventListener("spms-auth-updated", updateAuth);
+    return () => window.removeEventListener("spms-auth-updated", updateAuth);
+  }, []);
 
   async function handleLogout() {
       try {
