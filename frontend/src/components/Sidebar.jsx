@@ -68,7 +68,7 @@ function Sidebar() {
 
         <div className={sectionTitle}>System</div>
         <SidebarLink to="/notifications" icon="◌" label="Notifications" />
-        <SidebarLink to="/profile" icon="⚙" label="Settings" />
+        <SidebarLink to="/profile" icon="⚙" label="Profile & Skills" />
       </nav>
 
       {/* Current project card */}
