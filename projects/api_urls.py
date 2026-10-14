@@ -1,5 +1,5 @@
 from django.urls import path
-
+from .fairness import WorkloadFairnessView
 from .views import (
     AnalyticsView,
     CommentListCreateView,
@@ -34,6 +34,7 @@ urlpatterns = [
     path('projects/<int:project_pk>/recommendations/', TaskRecommendationView.as_view(), name='task-recommendations'),
     path('projects/<int:project_pk>/tasks/<int:task_pk>/recommendation/', TaskRecommendationView.as_view(), name='task-recommendation'),
     path('tasks/<int:pk>/', TaskDetailView.as_view(), name='task-detail'),
+    path('projects/<int:project_pk>/fairness/', WorkloadFairnessView.as_view(), name='workload-fairness'),
     path('tasks/<int:pk>/status/', TaskStatusUpdateView.as_view(), name='task-status'),
     path('tasks/<int:pk>/assign/', TaskAssignView.as_view(), name='task-assign'),
     path('tasks/<int:task_pk>/comments/', CommentListCreateView.as_view(), name='comment-list'),
