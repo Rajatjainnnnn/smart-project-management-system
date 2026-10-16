@@ -35,9 +35,13 @@
   --radius: 12px;
 }
 
-/* Global defaults belong in Tailwind's base layer.
-   Tailwind utilities can then override them normally. */
 @layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
   html,
   body,
   #root {
@@ -45,9 +49,20 @@
   }
 
   body {
-    font-family: Inter, -apple-system, BlinkMacSystemFont,
-      "Segoe UI", sans-serif;
+    font-family:
+      Inter,
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      sans-serif;
     background: var(--background);
     color: var(--text-primary);
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
   }
 }

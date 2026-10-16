@@ -12,10 +12,10 @@ function DashboardLayout() {
   }
 
   return (
-    <div className="app-layout">
+    <div className="min-h-screen flex">
       <Sidebar />
 
-      <div className="main-area">
+      <div className="w-[calc(100%-250px)] min-h-screen ml-62.5">
         <Navbar />
 
         <main className="page-content">
