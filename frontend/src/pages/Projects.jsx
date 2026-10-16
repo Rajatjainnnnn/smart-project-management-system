@@ -79,11 +79,16 @@ function isValidProject(project) {
     project !== null &&
     typeof project === "object" &&
     typeof project.id === "string" &&
+    project.id.trim().length > 0 &&
     typeof project.name === "string" &&
+    project.name.trim().length > 0 &&
     typeof project.description === "string" &&
     PROJECT_STATUSES.includes(project.status) &&
     typeof project.startDate === "string" &&
+    isValidDate(project.startDate) &&
     typeof project.endDate === "string" &&
+    isValidDate(project.endDate) &&
+    (!project.startDate || !project.endDate || project.endDate >= project.startDate) &&
     Number.isFinite(project.progress) &&
     project.progress >= 0 &&
     project.progress <= 100 &&
@@ -92,6 +97,19 @@ function isValidProject(project) {
         project[field] === undefined ||
         (Number.isInteger(project[field]) && project[field] >= 0)
     )
+  );
+}
+
+function isValidDate(value) {
+  if (value === "") return true;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
   );
 }
 
