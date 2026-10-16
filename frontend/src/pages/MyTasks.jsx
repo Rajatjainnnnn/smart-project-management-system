@@ -1,87 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 
-const DEMO_TASKS_STORAGE_KEY = "spms-demo-tasks-v1";
+import {
+  persistDemoTasks,
+  readDemoTasks,
+  TASK_PRIORITIES,
+  TASK_STATUSES,
+} from "../data/demoTasks";
 
-const sampleTasks = [
-  {
-    id: "TASK-101",
-    title: "Create Login API",
-    description: "Implement authentication API and token handling.",
-    project: "MCA E-Commerce",
-    status: "In Progress",
-    priority: "High",
-    dueDate: "Oct 10",
-    type: "Task",
-  },
-  {
-    id: "TASK-102",
-    title: "Build Dashboard",
-    description: "Create the main project dashboard interface.",
-    project: "MCA E-Commerce",
-    status: "To Do",
-    priority: "Medium",
-    dueDate: "Oct 12",
-    type: "Task",
-  },
-  {
-    id: "TASK-103",
-    title: "Fix Navigation Bug",
-    description: "Fix navigation issue on project pages.",
-    project: "SPMS",
-    status: "Review",
-    priority: "High",
-    dueDate: "Oct 9",
-    type: "Bug",
-  },
-  {
-    id: "TASK-104",
-    title: "Database Testing",
-    description: "Test project and task database operations.",
-    project: "SPMS",
-    status: "To Do",
-    priority: "Medium",
-    dueDate: "Oct 13",
-    type: "Task",
-  },
-  {
-    id: "TASK-105",
-    title: "Prepare Documentation",
-    description: "Prepare technical documentation for the project.",
-    project: "SPMS",
-    status: "Done",
-    priority: "Low",
-    dueDate: "Oct 7",
-    type: "Task",
-  },
-  {
-    id: "TASK-106",
-    title: "Fix Profile Form",
-    description: "Resolve validation issues in profile form.",
-    project: "SPMS",
-    status: "Done",
-    priority: "Medium",
-    dueDate: "Oct 6",
-    type: "Bug",
-  },
-];
-
-const statusOptions = [
-  "All",
-  "To Do",
-  "In Progress",
-  "Review",
-  "Done",
-];
-
-const priorityOptions = [
-  "All",
-  "High",
-  "Medium",
-  "Low",
-];
-
-const taskStatuses = statusOptions.filter((status) => status !== "All");
-const priorities = priorityOptions.filter((priority) => priority !== "All");
+const statusOptions = ["All", ...TASK_STATUSES];
+const priorityOptions = ["All", ...TASK_PRIORITIES];
+const taskStatuses = TASK_STATUSES;
+const priorities = TASK_PRIORITIES;
 
 const emptyTaskForm = {
   title: "",
@@ -91,28 +20,6 @@ const emptyTaskForm = {
   status: "To Do",
   dueDate: "",
 };
-
-function readDemoTasks() {
-  try {
-    const storedTasks = localStorage.getItem(DEMO_TASKS_STORAGE_KEY);
-
-    if (storedTasks === null) {
-      return { tasks: sampleTasks, error: "" };
-    }
-
-    const parsedTasks = JSON.parse(storedTasks);
-    if (!Array.isArray(parsedTasks)) {
-      throw new Error("Saved demo tasks are not in the expected format.");
-    }
-
-    return { tasks: parsedTasks, error: "" };
-  } catch {
-    return {
-      tasks: sampleTasks,
-      error: "Saved demo tasks could not be read. The sample task list is shown instead.",
-    };
-  }
-}
 
 function formatDueDate(dueDate) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
@@ -153,15 +60,7 @@ function MyTasks() {
 
   function saveTasks(nextTasks) {
     setTaskState({ tasks: nextTasks, error: "" });
-
-    try {
-      localStorage.setItem(DEMO_TASKS_STORAGE_KEY, JSON.stringify(nextTasks));
-      setPersistenceError("");
-    } catch {
-      setPersistenceError(
-        "Changes are visible for this session but could not be saved in this browser."
-      );
-    }
+    setPersistenceError(persistDemoTasks(nextTasks));
   }
 
   function closeCreateModal() {
@@ -185,10 +84,10 @@ function MyTasks() {
       }
     });
 
-    if (!priorities.includes(taskForm.priority)) {
+    if (!TASK_PRIORITIES.includes(taskForm.priority)) {
       errors.priority = "Select a valid priority.";
     }
-    if (!taskStatuses.includes(taskForm.status)) {
+    if (!TASK_STATUSES.includes(taskForm.status)) {
       errors.status = "Select a valid status.";
     }
 
@@ -422,6 +321,7 @@ function MyTasks() {
 
       {isCreateModalOpen ? (
         <CreateTaskModal
+          tasks={tasks}
           form={taskForm}
           errors={formErrors}
           onChange={updateTaskField}
@@ -434,7 +334,7 @@ function MyTasks() {
   );
 }
 
-function CreateTaskModal({ form, errors, onChange, onClose, onSubmit }) {
+function CreateTaskModal({ tasks, form, errors, onChange, onClose, onSubmit }) {
   const inputClass =
     "w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 
@@ -525,7 +425,7 @@ function CreateTaskModal({ form, errors, onChange, onClose, onSubmit }) {
                 placeholder="Enter a project name"
               />
               <datalist id="task-project-options">
-                {[...new Set(sampleTasks.map((task) => task.project))].map((project) => (
+                {[...new Set(tasks.map((task) => task.project))].map((project) => (
                   <option key={project} value={project} />
                 ))}
               </datalist>

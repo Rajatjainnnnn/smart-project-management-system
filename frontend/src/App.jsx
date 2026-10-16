@@ -13,6 +13,7 @@ import Projects from "./pages/Projects";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MyTasks from "./pages/MyTasks";
+import KanbanBoard from "./pages/KanbanBoard";
 
 import "./App.css";
 
@@ -37,6 +38,7 @@ function App() {
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/projects" element={<Projects />} />
+          <Route path="/projects/:projectId/board" element={<KanbanBoard />} />
           <Route path="/tasks" element={<MyTasks />} />
         </Route>
 
