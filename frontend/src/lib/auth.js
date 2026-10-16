@@ -1,4 +1,4 @@
-export const AUTH_KEY = 'spms-auth';
+export const AUTH_KEY = "spms-auth";
 
 export function getStoredAuth() {
   try {
@@ -23,13 +23,18 @@ async function readResponse(response) {
 }
 
 function getErrorMessage(data) {
-  const detail = data?.detail || data?.message || Object.values(data || {}).flat().join(' ');
-  return detail || 'Something went wrong.';
+  const detail =
+    data?.detail ||
+    data?.message ||
+    Object.values(data || {})
+      .flat()
+      .join(" ");
+  return detail || "Something went wrong.";
 }
 
 export async function apiRequest(path, options = {}) {
-  const { token, body, method = 'GET', headers = {} } = options;
-  const endpoint = path.startsWith('/api/') ? path : `/api/auth/${path}`;
+  const { token, body, method = "GET", headers = {} } = options;
+  const endpoint = path.startsWith("/api/") ? path : `/api/auth/${path}`;
   const auth = getStoredAuth();
   let accessToken = token ?? auth?.access;
 
@@ -37,7 +42,7 @@ export async function apiRequest(path, options = {}) {
     method,
     body,
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...headers,
     },
@@ -45,19 +50,22 @@ export async function apiRequest(path, options = {}) {
   let data = await readResponse(response);
 
   if (response.status === 401 && !token && auth?.refresh) {
-    const refreshResponse = await fetch('/api/auth/token/refresh/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const refreshResponse = await fetch("/api/auth/token/refresh/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh: auth.refresh }),
     });
     const refreshed = await readResponse(refreshResponse);
 
     if (!refreshResponse.ok || !refreshed?.access) {
       clearAuth();
-      if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-        window.location.assign('/login');
+      if (
+        window.location.pathname !== "/login" &&
+        window.location.pathname !== "/register"
+      ) {
+        window.location.assign("/login");
       }
-      throw new Error('Your session expired. Please sign in again.');
+      throw new Error("Your session expired. Please sign in again.");
     }
 
     const updatedAuth = {
@@ -66,14 +74,14 @@ export async function apiRequest(path, options = {}) {
       refresh: refreshed.refresh ?? auth.refresh,
     };
     saveAuth(updatedAuth);
-    window.dispatchEvent(new Event('spms-auth-updated'));
+    window.dispatchEvent(new Event("spms-auth-updated"));
     accessToken = updatedAuth.access;
 
     response = await fetch(endpoint, {
       method,
       body,
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
         ...headers,
       },
