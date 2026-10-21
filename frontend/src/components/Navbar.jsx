@@ -35,15 +35,15 @@ function Navbar() {
   const avatar = displayName.charAt(0).toUpperCase();
 
   return (
-    <header className="flex h-19 items-center justify-between border-b border-(--border) bg-(--surface) px-8">
-      <div>
-        <h2 className="text-base font-semibold">Smart Project Management</h2>
-        <p className="mt-0.75 text-xs text-(--text-muted)">
+    <header className="flex h-19 items-center justify-between gap-3 border-b border-(--border) bg-(--surface) px-4 sm:px-8">
+      <div className="min-w-0">
+        <h2 className="truncate text-base font-semibold">Smart Project Management</h2>
+        <p className="mt-0.75 hidden text-xs text-(--text-muted) sm:block">
           Manage your projects and team efficiently
         </p>
       </div>
 
-      <div className="flex items-center gap-4.5">
+      <div className="flex shrink-0 items-center gap-2.5 sm:gap-4.5">
         <button
           type="button"
           aria-label="Notifications"
@@ -58,14 +58,14 @@ function Navbar() {
             {avatar}
           </div>
 
-          <div>
+          <div className="hidden md:block">
             <strong className="block text-xs">{displayName}</strong>
-            <span className="mt-0.5 block text-[10px] text-(--text-muted)">
+            <span className="mt-0.5 block text-[11px] text-(--text-muted)">
               {auth?.user?.email || "Student"}
             </span>
           </div>
 
-          <span className="text-(--text-muted)">⌄</span>
+          <span className="hidden text-(--text-muted) md:inline">⌄</span>
         </div>
 
         <button
