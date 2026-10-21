@@ -1,18 +1,51 @@
-import { useState } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 
-import "./App.css";
-import { useEffect } from "react";
+import { getStoredAuth } from "./lib/auth";
+import DashboardLayout from "./layouts/DashboardLayout";
+
+import Dashboard from "./pages/Dashboard";
+import Projects from "./pages/Projects";
+import Profile from "./pages/Profile";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import MyTasks from "./pages/MyTasks";
+import KanbanBoard from "./pages/KanbanBoard";
+
+function ProtectedLayout() {
+  const auth = getStoredAuth();
+
+  if (!auth?.access) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <DashboardLayout />;
+}
 
 function App() {
-	const [response, setResponse] = useState("loading...");
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
-	useEffect(() => {
-		fetch("/api/test")
-			.then((res) => res.text())
-			.then((data) => setResponse(data));
-	}, []);
+        <Route element={<ProtectedLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/projects" element={<Projects />} />
+          <Route path="/projects/:projectId/board" element={<KanbanBoard />} />
+          <Route path="/tasks" element={<MyTasks />} />
+          <Route path="/profile" element={<Profile />} />
+        </Route>
 
-	return <div>Response: {response}</div>;
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
 export default App;
