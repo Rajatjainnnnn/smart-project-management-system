@@ -13,6 +13,7 @@ import Projects from "./pages/Projects";
 import Profile from "./pages/Profile";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Contribution from "./pages/Contribution";
 import MyTasks from "./pages/MyTasks";
 import KanbanBoard from "./pages/KanbanBoard";
 
@@ -39,6 +40,7 @@ function App() {
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:projectId/board" element={<KanbanBoard />} />
           <Route path="/tasks" element={<MyTasks />} />
+          <Route path="/contribution" element={<Contribution />} />
           <Route path="/profile" element={<Profile />} />
         </Route>
 
