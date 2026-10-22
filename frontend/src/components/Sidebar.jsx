@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 
 // Only these routes exist in App.jsx today. Other items are shown as "Soon"
 // (not clickable) so users are not bounced to the login page.
-const AVAILABLE_PATHS = ["/dashboard", "/projects", "/tasks", "/profile", "/risk"];
+   const AVAILABLE_PATHS = ["/dashboard", "/projects", "/tasks", "/notifications", "/profile", "/risk"];
 
 const menuItems = [
   { label: "Dashboard", path: "/dashboard", icon: "⌂" },
