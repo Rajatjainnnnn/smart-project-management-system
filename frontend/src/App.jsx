@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import Notifications from "./pages/Notifications";
 import Projects from "./pages/Projects";
 import Profile from "./pages/Profile";
+import Workload from "./pages/Workload";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Contribution from "./pages/Contribution";
@@ -41,6 +42,7 @@ function App() {
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:projectId/board" element={<KanbanBoard />} />
+          <Route path="/workload" element={<Workload />} />
           <Route path="/tasks" element={<MyTasks />} />
           <Route path="/contribution" element={<Contribution />} />
           <Route path="/profile" element={<Profile />} />
