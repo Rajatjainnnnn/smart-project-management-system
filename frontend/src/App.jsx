@@ -11,6 +11,7 @@ import DashboardLayout from "./layouts/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import Projects from "./pages/Projects";
 import Profile from "./pages/Profile";
+import Workload from "./pages/Workload";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MyTasks from "./pages/MyTasks";
@@ -38,6 +39,7 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:projectId/board" element={<KanbanBoard />} />
+          <Route path="/workload" element={<Workload />} />
           <Route path="/tasks" element={<MyTasks />} />
           <Route path="/profile" element={<Profile />} />
         </Route>
