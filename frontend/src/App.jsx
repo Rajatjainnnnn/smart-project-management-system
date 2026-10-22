@@ -15,6 +15,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MyTasks from "./pages/MyTasks";
 import KanbanBoard from "./pages/KanbanBoard";
+import RiskRadar from "./pages/RiskRadar";
 
 function ProtectedLayout() {
   const auth = getStoredAuth();
@@ -40,6 +41,7 @@ function App() {
           <Route path="/projects/:projectId/board" element={<KanbanBoard />} />
           <Route path="/tasks" element={<MyTasks />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/risk" element={<RiskRadar />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />
