@@ -102,7 +102,7 @@ function RiskDetails({ data }) {
         )}
       </div>
 
-      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Overdue tasks" value={data.overdue_tasks ?? 0} hint="Past their due date and not done" />
         <MetricCard
           label="High-priority open"
@@ -113,6 +113,11 @@ function RiskDetails({ data }) {
           label="Pending milestones"
           value={data.pending_milestones ?? 0}
           hint="Not started or in progress"
+        />
+        <MetricCard
+          label="Blocked by dependencies"
+          value={data.blocked_tasks ?? 0}
+          hint="Open tasks waiting on unfinished work"
         />
       </div>
 

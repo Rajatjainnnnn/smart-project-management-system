@@ -17,7 +17,10 @@ export function clearAuth() {
   localStorage.removeItem(AUTH_KEY);
 }
 
-async function readResponse(response) {
+async function readResponse(response, responseType) {
+  if (response.ok && responseType === "blob") {
+    return response.blob();
+  }
   const text = await response.text();
   return text ? JSON.parse(text) : null;
 }
@@ -33,21 +36,23 @@ function getErrorMessage(data) {
 }
 
 export async function apiRequest(path, options = {}) {
-  const { token, body, method = "GET", headers = {} } = options;
+  const { token, body, method = "GET", headers = {}, responseType } = options;
   const endpoint = path.startsWith("/api/") ? path : `/api/auth/${path}`;
   const auth = getStoredAuth();
   let accessToken = token ?? auth?.access;
+  const isMultipart = typeof FormData !== "undefined" && body instanceof FormData;
+  const requestHeaders = {
+    ...(!isMultipart ? { "Content-Type": "application/json" } : {}),
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    ...headers,
+  };
 
   let response = await fetch(endpoint, {
     method,
     body,
-    headers: {
-      "Content-Type": "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...headers,
-    },
+    headers: requestHeaders,
   });
-  let data = await readResponse(response);
+  let data = await readResponse(response, responseType);
 
   if (response.status === 401 && !token && auth?.refresh) {
     const refreshResponse = await fetch("/api/auth/token/refresh/", {
@@ -81,12 +86,12 @@ export async function apiRequest(path, options = {}) {
       method,
       body,
       headers: {
-        "Content-Type": "application/json",
+        ...(!isMultipart ? { "Content-Type": "application/json" } : {}),
         Authorization: `Bearer ${accessToken}`,
         ...headers,
       },
     });
-    data = await readResponse(response);
+    data = await readResponse(response, responseType);
   }
 
   if (!response.ok) {

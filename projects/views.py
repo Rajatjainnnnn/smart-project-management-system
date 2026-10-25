@@ -1,5 +1,7 @@
 
 from django.contrib.auth import get_user_model
+from django.http import FileResponse
+from pathlib import Path
 from django.db import transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
@@ -7,6 +9,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
 from .models import (
@@ -24,6 +27,7 @@ from .serializers import (
     ProjectMemberSerializer,
     ProjectSerializer,
     TaskSerializer,
+)
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -33,7 +37,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .models import ActivityLog, Comment, Milestone, Notification, Profile, Project, ProjectMember, Skill, Task, UserSkill
+from .models import ActivityLog, Comment, Milestone, Notification, Profile, Project, ProjectMember, Skill, Task, TaskAttachment, UserSkill
 from .serializers import (
     ActivityLogSerializer,
     CommentSerializer,
@@ -45,6 +49,7 @@ from .serializers import (
     RegisterSerializer,
     SkillSerializer,
     TaskSerializer,
+    TaskAttachmentSerializer,
     UserSerializer,
     UserProfileUpdateSerializer,
     UserSkillSerializer,
@@ -388,6 +393,15 @@ def is_project_admin(user, project):
     return (member.role or '').strip().lower() in PROJECT_ADMIN_ROLES
 
 
+def log_project_activity(project, user, action, details=''):
+    return ActivityLog.objects.create(
+        project=project,
+        user=user,
+        action=action,
+        details=details,
+    )
+
+
 def build_skill_match_score(user, task):
     required_skills = list(task.required_skills.all())
     if not required_skills:
@@ -421,6 +435,11 @@ def build_project_risk(project):
     ).exclude(status='done')
 
     milestone_pending = project.milestones.filter(status__in=['pending', 'in_progress']).count()
+    blocked_tasks = Task.objects.filter(
+        project=project,
+        status__in=['todo', 'in_progress', 'review'],
+        dependencies__status__in=['todo', 'in_progress', 'review'],
+    ).distinct().count()
     workload = []
     for member in User.objects.filter(project_memberships__project=project).distinct():
         tasks = Task.objects.filter(project=project, assignee=member)
@@ -437,10 +456,10 @@ def build_project_risk(project):
     risk_level = 'low'
     reasons = []
 
-    if overdue_tasks.count() >= 3 or critical_unfinished.count() >= 2 or milestone_pending >= 3:
+    if overdue_tasks.count() >= 3 or critical_unfinished.count() >= 2 or milestone_pending >= 3 or blocked_tasks >= 3:
         risk_level = 'high'
         reasons.append('Multiple overdue or high-priority tasks are still open.')
-    elif overdue_tasks.count() >= 1 or critical_unfinished.exists() or milestone_pending >= 1:
+    elif overdue_tasks.count() >= 1 or critical_unfinished.exists() or milestone_pending >= 1 or blocked_tasks:
         risk_level = 'medium'
         reasons.append('Some deadlines and project milestones need attention.')
     else:
@@ -448,8 +467,10 @@ def build_project_risk(project):
 
     if workload:
         reasons.append(f'Overloaded team members: {", ".join(workload)}.')
+    if blocked_tasks:
+        reasons.append(f'{blocked_tasks} open tasks are waiting on unfinished dependencies.')
 
-    return {'risk_level': risk_level, 'reasons': reasons}
+    return {'risk_level': risk_level, 'reasons': reasons, 'blocked_tasks': blocked_tasks}
 
 
 def build_workload_snapshot(project):
@@ -581,6 +602,24 @@ class SkillListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
 
+class UserDirectoryView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        users = User.objects.all().order_by('username')
+        search = request.query_params.get('search', '').strip()
+        if search:
+            users = users.filter(
+                Q(username__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search)
+            )
+        return Response(list(users.values(
+            'id', 'username', 'first_name', 'last_name', 'email'
+        )[:50]))
+
+
 class UserSkillListCreateView(generics.ListCreateAPIView):
     serializer_class = UserSkillSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -622,7 +661,18 @@ class ProjectListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return project_access_queryset(self.request.user)
+        return project_access_queryset(self.request.user).annotate(
+            task_count=Count('tasks', distinct=True),
+            completed_task_count=Count(
+                'tasks',
+                filter=Q(tasks__status='done'),
+                distinct=True,
+            ),
+        )
+
+    def perform_create(self, serializer):
+        project = serializer.save()
+        log_project_activity(project, self.request.user, 'Project created')
 
 
 class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -630,7 +680,14 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return project_access_queryset(self.request.user)
+        return project_access_queryset(self.request.user).annotate(
+            task_count=Count('tasks', distinct=True),
+            completed_task_count=Count(
+                'tasks',
+                filter=Q(tasks__status='done'),
+                distinct=True,
+            ),
+        )
 
     def update(self, request, *args, **kwargs):
         project = self.get_object()
@@ -683,6 +740,14 @@ class ProjectMemberListCreateView(APIView):
         if not created:
             member.role = role
             member.save(update_fields=['role'])
+        else:
+            Notification.objects.create(
+                recipient=user,
+                title='Added to a project',
+                message=f'You were added to {project.name}.',
+                link=f'/projects/{project.pk}',
+            )
+            log_project_activity(project, request.user, 'Team member added', user.username)
 
         return Response({
             'id': member.id,
@@ -719,7 +784,12 @@ class MilestoneListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         project_pk = self.kwargs['project_pk']
-        return Milestone.objects.filter(project__pk=project_pk, project__owner=self.request.user)
+        return Milestone.objects.filter(
+            project__pk=project_pk,
+        ).filter(
+            Q(project__owner=self.request.user) |
+            Q(project__members__user=self.request.user)
+        ).distinct()
 
     def perform_create(self, serializer):
         project = Project.objects.filter(pk=self.kwargs['project_pk']).first()
@@ -727,7 +797,41 @@ class MilestoneListCreateView(generics.ListCreateAPIView):
             self.permission_denied(self.request, message='Project not found.')
         if not is_project_admin(self.request.user, project):
             self.permission_denied(self.request, message='Only the project owner or team lead can create milestones.')
-        serializer.save(project=project)
+        milestone = serializer.save(project=project)
+        log_project_activity(project, self.request.user, 'Milestone created', milestone.title)
+
+
+class MilestoneDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = MilestoneSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Milestone.objects.filter(
+            Q(project__owner=self.request.user) |
+            Q(project__members__user=self.request.user)
+        ).distinct()
+
+    def update(self, request, *args, **kwargs):
+        milestone = self.get_object()
+        if not is_project_admin(request.user, milestone.project):
+            return Response(
+                {'detail': 'Only the project owner or team lead can update milestones.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        response = super().update(request, *args, **kwargs)
+        if response.status_code < 400:
+            log_project_activity(milestone.project, request.user, 'Milestone updated', milestone.title)
+        return response
+
+    def destroy(self, request, *args, **kwargs):
+        milestone = self.get_object()
+        if not is_project_admin(request.user, milestone.project):
+            return Response(
+                {'detail': 'Only the project owner or team lead can delete milestones.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        log_project_activity(milestone.project, request.user, 'Milestone deleted', milestone.title)
+        return super().destroy(request, *args, **kwargs)
 
 
 class TaskListCreateView(generics.ListCreateAPIView):
@@ -738,13 +842,45 @@ class TaskListCreateView(generics.ListCreateAPIView):
         project_pk = self.kwargs['project_pk']
         return Task.objects.filter(project__pk=project_pk).filter(Q(project__owner=self.request.user) | Q(project__members__user=self.request.user)).distinct()
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['project'] = Project.objects.filter(
+            pk=self.kwargs['project_pk'],
+        ).filter(
+            Q(owner=self.request.user) | Q(members__user=self.request.user)
+        ).first()
+        return context
+
     def perform_create(self, serializer):
         project = Project.objects.filter(pk=self.kwargs['project_pk']).first()
         if project is None:
             self.permission_denied(self.request, message='Project not found.')
         if not is_project_admin(self.request.user, project):
             self.permission_denied(self.request, message='Only the project owner or team lead can create tasks.')
-        serializer.save(project=project)
+        task = serializer.save(project=project)
+        log_project_activity(project, self.request.user, 'Task created', task.title)
+        if task.assignee_id and task.assignee_id != self.request.user.pk:
+            Notification.objects.create(
+                recipient=task.assignee,
+                title='Task assigned',
+                message=f'You were assigned "{task.title}" in {project.name}.',
+                link='/tasks',
+            )
+
+
+class MyTaskListView(generics.ListAPIView):
+    serializer_class = TaskSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Task.objects.filter(
+            assignee=self.request.user,
+        ).filter(
+            Q(project__owner=self.request.user) |
+            Q(project__members__user=self.request.user)
+        ).select_related('project', 'creator', 'assignee').prefetch_related(
+            'required_skills'
+        ).order_by('due_date', '-created_at')
 
 
 class TaskDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -759,7 +895,18 @@ class TaskDetailView(generics.RetrieveUpdateDestroyAPIView):
         task = self.get_object()
         if not is_project_admin(request.user, task.project):
             return Response({'detail': 'Only the project owner or team lead can update tasks.'}, status=status.HTTP_403_FORBIDDEN)
-        return super().update(request, *args, **kwargs)
+        previous_assignee_id = task.assignee_id
+        response = super().update(request, *args, **kwargs)
+        task.refresh_from_db()
+        log_project_activity(task.project, request.user, 'Task updated', task.title)
+        if task.assignee_id and task.assignee_id != previous_assignee_id:
+            Notification.objects.create(
+                recipient=task.assignee,
+                title='Task assigned',
+                message=f'You were assigned "{task.title}" in {task.project.name}.',
+                link='/tasks',
+            )
+        return response
 
     def destroy(self, request, *args, **kwargs):
         task = self.get_object()
@@ -783,8 +930,23 @@ class TaskStatusUpdateView(APIView):
         if task.assignee_id != request.user.id and not is_project_admin(request.user, task.project):
             return Response({'detail': 'Only the task assignee or project admin can change the task status.'}, status=status.HTTP_403_FORBIDDEN)
 
+        previous_status = task.status
         task.status = status_value
         task.save(update_fields=['status', 'updated_at'])
+        if previous_status != status_value:
+            log_project_activity(
+                task.project,
+                request.user,
+                'Task status changed',
+                f'{task.title}: {previous_status} -> {status_value}',
+            )
+            if task.assignee_id and task.assignee_id != request.user.pk:
+                Notification.objects.create(
+                    recipient=task.assignee,
+                    title='Task status updated',
+                    message=f'"{task.title}" moved to {task.get_status_display()}.',
+                    link='/tasks',
+                )
         return Response(TaskSerializer(task).data)
 
 
@@ -792,7 +954,10 @@ class TaskAssignView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def patch(self, request, pk):
-        task = Task.objects.filter(pk=pk).first()
+        task = Task.objects.filter(pk=pk).filter(
+            Q(project__owner=request.user) |
+            Q(project__members__user=request.user)
+        ).first()
         if task is None:
             return Response({'detail': 'Task not found.'}, status=status.HTTP_404_NOT_FOUND)
         if not is_project_admin(request.user, task.project):
@@ -812,8 +977,17 @@ class TaskAssignView(APIView):
         if not project_membership:
             return Response({'detail': 'Assignee must be a project member.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        previous_assignee_id = task.assignee_id
         task.assignee = assignee
         task.save(update_fields=['assignee', 'updated_at'])
+        if previous_assignee_id != assignee.pk:
+            Notification.objects.create(
+                recipient=assignee,
+                title='Task assigned',
+                message=f'You were assigned "{task.title}" in {task.project.name}.',
+                link='/tasks',
+            )
+            log_project_activity(task.project, request.user, 'Task assigned', task.title)
         return Response(TaskSerializer(task).data)
 
 
@@ -847,6 +1021,82 @@ class CommentListCreateView(generics.ListCreateAPIView):
         if task is None:
             self.permission_denied(self.request, message='Task not found.')
         serializer.save(task=task, author=self.request.user)
+        log_project_activity(task.project, self.request.user, 'Comment added', task.title)
+        recipient_ids = {task.assignee_id, task.creator_id} - {None, self.request.user.pk}
+        for recipient_id in recipient_ids:
+            Notification.objects.create(
+                recipient_id=recipient_id,
+                title='New task comment',
+                message=f'{self.request.user.username} commented on "{task.title}".',
+                link='/tasks',
+            )
+
+
+class TaskAttachmentListCreateView(generics.ListCreateAPIView):
+    serializer_class = TaskAttachmentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_task(self):
+        return get_object_or_404(
+            Task.objects.filter(
+                Q(project__owner=self.request.user) |
+                Q(project__members__user=self.request.user)
+            ).distinct(),
+            pk=self.kwargs['task_pk'],
+        )
+
+    def get_queryset(self):
+        return TaskAttachment.objects.filter(task=self.get_task()).select_related('uploaded_by')
+
+    def perform_create(self, serializer):
+        task = self.get_task()
+        uploaded_file = serializer.validated_data['file']
+        attachment = serializer.save(
+            task=task,
+            uploaded_by=self.request.user,
+            original_name=Path(uploaded_file.name).name,
+        )
+        log_project_activity(task.project, self.request.user, 'Attachment uploaded', attachment.original_name)
+
+
+class TaskAttachmentDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_attachment(self, pk):
+        return get_object_or_404(
+            TaskAttachment.objects.filter(
+                Q(task__project__owner=self.request.user) |
+                Q(task__project__members__user=self.request.user)
+            ).distinct(),
+            pk=pk,
+        )
+
+    def get(self, request, pk):
+        attachment = self.get_attachment(pk)
+        response = FileResponse(
+            attachment.file.open('rb'),
+            as_attachment=True,
+            filename=attachment.original_name,
+        )
+        return response
+
+    def delete(self, request, pk):
+        attachment = self.get_attachment(pk)
+        if (
+            attachment.uploaded_by_id != request.user.pk and
+            not is_project_admin(request.user, attachment.task.project)
+        ):
+            raise PermissionDenied('Only the uploader or a project lead can delete this attachment.')
+        log_project_activity(
+            attachment.task.project,
+            request.user,
+            'Attachment deleted',
+            attachment.original_name,
+        )
+        attachment.file.delete(save=False)
+        attachment.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class NotificationListView(generics.ListAPIView):
@@ -854,7 +1104,10 @@ class NotificationListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Notification.objects.filter(recipient=self.request.user)
+        queryset = Notification.objects.filter(recipient=self.request.user)
+        if self.request.query_params.get('unread') == 'true':
+            queryset = queryset.filter(read=False)
+        return queryset
 
 
 class NotificationReadView(APIView):
@@ -867,6 +1120,20 @@ class NotificationReadView(APIView):
         notification.read = True
         notification.save(update_fields=['read'])
         return Response(NotificationSerializer(notification).data)
+
+
+class ProjectActivityView(generics.ListAPIView):
+    serializer_class = ActivityLogSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        project_pk = self.kwargs['project_pk']
+        return ActivityLog.objects.filter(
+            project__pk=project_pk,
+        ).filter(
+            Q(project__owner=self.request.user) |
+            Q(project__members__user=self.request.user)
+        ).select_related('user', 'project').order_by('-created_at')
 
 
 class DashboardView(APIView):
