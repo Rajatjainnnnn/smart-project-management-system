@@ -57,6 +57,10 @@ def task_summary(project):
         "completed_tasks": completed,
         "open_tasks": total - completed,
         "overdue_tasks": overdue,
+        "blocked_tasks": tasks.filter(
+            status__in=OPEN_STATUSES,
+            dependencies__status__in=OPEN_STATUSES,
+        ).distinct().count(),
         "completion_percentage": round((completed / total) * 100, 2) if total else 0,
         "status_breakdown": {
             key: status_counts.get(key, 0)
@@ -94,6 +98,7 @@ class ProjectAnalyticsView(APIView):
             "pending_milestones": milestones.filter(
                 status__in=("pending", "in_progress")
             ).count(),
+            "blocked_tasks": summary["blocked_tasks"],
             "risk_level": risk["risk_level"],
             "risk_reasons": risk["reasons"],
             "recent_activity": ActivityLogSerializer(
@@ -169,5 +174,6 @@ class ProjectRiskView(APIView):
             "pending_milestones": Milestone.objects.filter(
                 project=project, status__in=("pending", "in_progress")
             ).count(),
+            "blocked_tasks": summary["blocked_tasks"],
             "generated_at": timezone.now(),
         })

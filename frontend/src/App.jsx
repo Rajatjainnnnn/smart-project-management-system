@@ -19,6 +19,9 @@ import Contribution from "./pages/Contribution";
 import MyTasks from "./pages/MyTasks";
 import KanbanBoard from "./pages/KanbanBoard";
 import RiskRadar from "./pages/RiskRadar";
+import ProjectDetails from "./pages/ProjectDetails";
+import Team from "./pages/Team";
+import Analytics from "./pages/Analytics";
 
 function ProtectedLayout() {
   const auth = getStoredAuth();
@@ -42,9 +45,13 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/projects" element={<Projects />} />
+          <Route path="/projects/:projectId" element={<ProjectDetails />} />
           <Route path="/projects/:projectId/board" element={<KanbanBoard />} />
           <Route path="/workload" element={<Workload />} />
           <Route path="/tasks" element={<MyTasks />} />
+          <Route path="/bugs" element={<MyTasks issueType="bug" />} />
+          <Route path="/team" element={<Team />} />
+          <Route path="/analytics" element={<Analytics />} />
           <Route path="/contribution" element={<Contribution />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/risk" element={<RiskRadar />} />

@@ -15,7 +15,7 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import ActivityLog, Comment, Milestone, Notification, Profile, Project, ProjectMember, Skill, Task, UserSkill
+from .models import ActivityLog, Comment, Milestone, Notification, Profile, Project, ProjectMember, Skill, Task, TaskAttachment, UserSkill
 
 User = get_user_model()
 
@@ -276,6 +276,8 @@ class ProjectMemberSerializer(serializers.ModelSerializer):
 class ProjectSerializer(serializers.ModelSerializer):
     owner = UserSerializer(read_only=True)
     members = ProjectMemberSerializer(many=True, read_only=True)
+    task_count = serializers.IntegerField(read_only=True, default=0)
+    completed_task_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Project
@@ -288,6 +290,8 @@ class ProjectSerializer(serializers.ModelSerializer):
             'end_date',
             'owner',
             'members',
+            'task_count',
+            'completed_task_count',
             'created_at',
             'updated_at',
         )
@@ -314,8 +318,17 @@ class TaskSerializer(serializers.ModelSerializer):
     assignee = UserSerializer(read_only=True)
     assignee_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     required_skills = SkillSerializer(many=True, read_only=True)
-    required_skill_ids = serializers.ListField(
-        child=serializers.IntegerField(),
+    required_skill_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Skill.objects.all(),
+        many=True,
+        write_only=True,
+        required=False,
+        allow_empty=True,
+    )
+    dependencies = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+    dependency_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Task.objects.all(),
+        many=True,
         write_only=True,
         required=False,
         allow_empty=True,
@@ -338,6 +351,8 @@ class TaskSerializer(serializers.ModelSerializer):
             'assignee_id',
             'required_skills',
             'required_skill_ids',
+            'dependencies',
+            'dependency_ids',
             'created_at',
             'updated_at',
         )
@@ -345,6 +360,7 @@ class TaskSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         required_skill_ids = validated_data.pop('required_skill_ids', [])
+        dependency_ids = validated_data.pop('dependency_ids', [])
         assignee_id = validated_data.pop('assignee_id', None)
         task = Task.objects.create(creator=self.context['request'].user, **validated_data)
         if assignee_id is not None:
@@ -352,18 +368,65 @@ class TaskSerializer(serializers.ModelSerializer):
             task.save(update_fields=['assignee'])
         if required_skill_ids:
             task.required_skills.set(required_skill_ids)
+        if dependency_ids:
+            task.dependencies.set(dependency_ids)
         return task
+
+    def validate(self, attrs):
+        project = attrs.get('project') or self.context.get('project')
+        if project is None and self.instance is not None:
+            project = self.instance.project
+        assignee_id = attrs.get('assignee_id')
+        if project and assignee_id:
+            is_member = ProjectMember.objects.filter(
+                project=project,
+                user_id=assignee_id,
+            ).exists()
+            if not is_member:
+                raise serializers.ValidationError({
+                    'assignee_id': 'The assignee must belong to this project.'
+                })
+        dependencies = attrs.get('dependency_ids', [])
+        if project and any(dependency.project_id != project.pk for dependency in dependencies):
+            raise serializers.ValidationError({
+                'dependency_ids': 'Dependencies must belong to the same project.'
+            })
+        if self.instance is not None:
+            for dependency in dependencies:
+                if dependency.pk == self.instance.pk or self._depends_on(
+                    dependency,
+                    self.instance.pk,
+                    set(),
+                ):
+                    raise serializers.ValidationError({
+                        'dependency_ids': 'Task dependencies cannot contain a cycle.'
+                    })
+        return attrs
+
+    def _depends_on(self, task, target_id, visited):
+        if task.pk == target_id:
+            return True
+        if task.pk in visited:
+            return False
+        visited.add(task.pk)
+        return any(
+            self._depends_on(dependency, target_id, visited)
+            for dependency in task.dependencies.all()
+        )
 
     def update(self, instance, validated_data):
         required_skill_ids = validated_data.pop('required_skill_ids', None)
-        assignee_id = validated_data.pop('assignee_id', None)
-        if assignee_id is not None:
+        dependency_ids = validated_data.pop('dependency_ids', None)
+        assignee_id = validated_data.pop('assignee_id', serializers.empty)
+        if assignee_id is not serializers.empty:
             instance.assignee_id = assignee_id
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
         if required_skill_ids is not None:
             instance.required_skills.set(required_skill_ids)
+        if dependency_ids is not None:
+            instance.dependencies.set(dependency_ids)
         return instance
 
 
@@ -377,17 +440,29 @@ class CommentSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'author', 'created_at', 'task')
 
 
+class TaskAttachmentSerializer(serializers.ModelSerializer):
+    file = serializers.FileField(write_only=True)
+    uploaded_by = UserSummarySerializer(read_only=True)
+    size = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TaskAttachment
+        fields = ('id', 'task', 'original_name', 'file', 'size', 'uploaded_by', 'download_url', 'created_at')
+        read_only_fields = ('id', 'task', 'original_name', 'size', 'uploaded_by', 'download_url', 'created_at')
+
+    def get_size(self, obj):
+        return obj.file.size
+
+    def get_download_url(self, obj):
+        return f'/api/attachments/{obj.pk}/download/'
+
+
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
-        fields = [
-            "id",
-            "message",
-            "link",
-            "is_read",
-            "created_at",
-        ]
-        read_only_fields = fields
+        fields = ("id", "title", "message", "link", "read", "created_at")
+        read_only_fields = ("id", "created_at")
 
 
 class ActivityLogSerializer(serializers.ModelSerializer):

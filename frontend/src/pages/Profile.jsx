@@ -26,7 +26,9 @@ function Profile() {
     confirm_password: "",
   });
   const [loading, setLoading] = useState(true);
+  const [loadKey, setLoadKey] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const availableSkills = skills.filter(
@@ -55,7 +57,10 @@ function Profile() {
         setSelectedSkill(String(catalog[0]?.id || ""));
       })
       .catch((loadError) => {
-        if (isActive) setError(loadError.message || "Could not load your profile.");
+        if (isActive) {
+          setProfile(null);
+          setError(loadError.message || "Could not load your profile.");
+        }
       })
       .finally(() => {
         if (isActive) setLoading(false);
@@ -64,7 +69,7 @@ function Profile() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [loadKey]);
 
   function updateForm(event) {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
@@ -170,6 +175,7 @@ function Profile() {
       setError("New password and confirmation do not match.");
       return;
     }
+    setPasswordSaving(true);
     try {
       await apiRequest("/api/auth/password/", {
         method: "POST",
@@ -182,11 +188,37 @@ function Profile() {
       setMessage("Password changed successfully.");
     } catch (passwordError) {
       setError(passwordError.message || "Could not change your password.");
+    } finally {
+      setPasswordSaving(false);
     }
   }
 
   if (loading) {
     return <div className="p-8 text-sm text-(--text-secondary)">Loading your profile...</div>;
+  }
+
+  if (!profile) {
+    function retryProfileLoad() {
+      setError("");
+      setLoading(true);
+      setLoadKey((key) => key + 1);
+    }
+
+    return (
+      <div className="mx-auto max-w-3xl p-8">
+        <div className="rounded-(--radius) border border-red-200 bg-red-50 p-6">
+          <h1 className="text-lg font-semibold text-red-800">Profile unavailable</h1>
+          <p role="alert" className="mt-2 text-sm text-red-700">{error || "Could not load your profile."}</p>
+          <button
+            type="button"
+            onClick={retryProfileLoad}
+            className="mt-4 rounded-lg bg-(--primary) px-4 py-2.5 text-sm font-semibold text-white hover:bg-(--primary-hover)"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -327,8 +359,8 @@ function Profile() {
             <input className={inputClass} type="password" autoComplete="new-password" value={passwordForm.confirm_password} onChange={(event) => setPasswordForm((current) => ({ ...current, confirm_password: event.target.value }))} required />
           </label>
           <div className="sm:col-span-3">
-            <button className="rounded-lg border border-(--border) px-4 py-2.5 text-sm font-semibold text-(--text-secondary) hover:bg-slate-50">
-              Change password
+            <button disabled={passwordSaving} className="rounded-lg border border-(--border) px-4 py-2.5 text-sm font-semibold text-(--text-secondary) hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60">
+              {passwordSaving ? "Changing password..." : "Change password"}
             </button>
           </div>
         </form>

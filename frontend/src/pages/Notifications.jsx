@@ -95,6 +95,7 @@ function Notifications() {
         ...current,
         items: current.items.map((item) => (item.id === id ? { ...item, isRead: true } : item)),
       }));
+      window.dispatchEvent(new Event("spms-notifications-updated"));
     } catch {
       setActionError("Could not mark that notification as read. Please try again.");
     } finally {
@@ -189,7 +190,7 @@ function Notifications() {
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
-                {item.link.startsWith("/") && (
+                {item.link.startsWith("/") && !item.link.startsWith("//") && (
                   <Link to={item.link} className={`${secondaryButton} no-underline`}>
                     Open
                   </Link>

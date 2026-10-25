@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { loadDashboardData } from "../data/dashboardData";
 
@@ -224,9 +224,9 @@ function DashboardContent({ data }) {
             </div>
           </div>
 
-          <button type="button" className={secondaryButton} disabled title="Coming soon">
+          <Link to="/risk" className={`${secondaryButton} inline-block no-underline`}>
             View Risk Details
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -304,9 +304,9 @@ function DashboardContent({ data }) {
           <p className="mt-1 text-xs text-(--text-secondary)">{insight}</p>
         </div>
 
-        <button type="button" className={`${smartButton} self-start sm:self-auto`} disabled title="Coming soon">
+        <Link to="/workload" className={`${smartButton} self-start no-underline sm:self-auto`}>
           View Insights
-        </button>
+        </Link>
       </div>
     </>
   );
@@ -323,7 +323,7 @@ function Dashboard() {
     loadDashboardData()
       .then((data) => {
         if (!active) return;
-        setState({ status: data.stats.total === 0 ? "empty" : "ready", data });
+        setState({ status: data.hasProjects ? "ready" : "empty", data });
       })
       .catch(() => {
         if (!active) return;
@@ -370,11 +370,6 @@ function Dashboard() {
 
       {state.status === "ready" && (
         <>
-          {state.data.isDemo && (
-            <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              Showing demo data. These numbers are not connected to the backend yet.
-            </p>
-          )}
           <DashboardContent data={state.data} />
         </>
       )}

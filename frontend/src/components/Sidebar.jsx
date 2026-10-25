@@ -1,13 +1,24 @@
 import { NavLink } from "react-router-dom";
 
-// Only these routes exist in App.jsx today. Other items are shown as "Soon"
-// (not clickable) so users are not bounced to the login page.
-   const AVAILABLE_PATHS = ["/dashboard", "/projects", "/tasks", "/notifications", "/profile", "/risk"];
+const AVAILABLE_PATHS = [
+  "/dashboard",
+  "/projects",
+  "/tasks",
+  "/bugs",
+  "/team",
+  "/analytics",
+  "/workload",
+  "/contribution",
+  "/notifications",
+  "/profile",
+  "/risk",
+];
 
 const menuItems = [
   { label: "Dashboard", path: "/dashboard", icon: "⌂" },
   { label: "Projects", path: "/projects", icon: "▣" },
   { label: "My Tasks", path: "/tasks", icon: "✓" },
+  { label: "Bugs", path: "/bugs", icon: "!" },
   { label: "Team", path: "/team", icon: "♙" },
 ];
 
@@ -109,19 +120,6 @@ function Sidebar({ open = false, onNavigate }) {
         <SidebarLink to="/profile" icon="⚙" label="Profile & Skills" onNavigate={onNavigate} />
       </nav>
 
-      {/* Current project card */}
-      <div className="mt-auto rounded-[10px] border border-slate-800 bg-[#111C2D] p-3.5">
-        <div className="text-[10px] font-bold tracking-[0.07em] text-slate-400">
-          CURRENT PROJECT
-        </div>
-        <div className="mt-1.75 text-xs font-semibold text-white">MCA E-Commerce</div>
-        <div className="mt-2.75 h-1.25 overflow-hidden rounded-full bg-slate-700">
-          <div className="h-full w-[72%] bg-(--primary)" />
-        </div>
-        <div className="mt-1.75 text-[11px] text-slate-400">
-          <span>72% complete</span>
-        </div>
-      </div>
     </aside>
   );
 }
